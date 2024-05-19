@@ -1,58 +1,52 @@
 <?php
-session_start();
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit();
-}
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-include 'includes/db.php';
+// Include necessary files
+include 'includes/header.php';
+include 'includes/db.php'; // Ensure this includes your database connection
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+// Specify the directory where images should be uploaded
+$upload_directory = "images/auctions/";
+
+// Handle form submission for adding an auction
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $title = $_POST['title'];
     $description = $_POST['description'];
-    $categoryId = $_POST['category'];
-    $endDate = $_POST['endDate'];
-    $userId = $_SESSION['user_id'];
+    $category_id = $_POST['category'];
+    $end_date = $_POST['end_date'];
+    $current_price = $_POST['current_price'];
+    $user_id = $_SESSION['user_id'];
 
-    // Handle the image upload
-    $target_dir = "uploads/";
-    $target_file = $target_dir . basename($_FILES["image"]["name"]);
-    $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+    // Handle image upload
+    if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $image = basename($_FILES['image']['name']);
+        $target_file = $upload_directory . $image;
 
-    // Check if image file is a actual image or fake image
-    $check = getimagesize($_FILES["image"]["tmp_name"]);
-    if ($check === false) {
-        die("File is not an image.");
+        // Move uploaded file to destination directory
+        if (move_uploaded_file($_FILES['image']['tmp_name'], $target_file)) {
+            chmod($target_file, 0644); // Set appropriate permissions for the uploaded file
+            echo "File uploaded successfully: $target_file";
+        } else {
+            echo "Failed to move uploaded file.";
+        }
+    } else {
+        echo "Error during file upload: " . $_FILES['image']['error'];
     }
 
-    // Check file size (5MB limit)
-    if ($_FILES["image"]["size"] > 5000000) {
-        die("Sorry, your file is too large.");
-    }
+    // Insert auction details into the database
+    $stmt = $pdo->prepare('INSERT INTO auctions (title, description, category_id, user_id, end_date, image, current_price) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$title, $description, $category_id, $user_id, $end_date, $image, $current_price]);
 
-    // Allow certain file formats
-    $allowedFormats = array("jpg", "png", "jpeg", "gif");
-    if (!in_array($imageFileType, $allowedFormats)) {
-        die("Sorry, only JPG, JPEG, PNG & GIF files are allowed.");
-    }
-
-    // Move the file to the target directory
-    if (!move_uploaded_file($_FILES["image"]["tmp_name"], $target_file)) {
-        die("Sorry, there was an error uploading your file.");
-    }
-
-    try {
-        // Insert the auction details along with the image path
-        $stmt = $pdo->prepare('INSERT INTO auction (title, description, categoryId, endDate, userId, imagePath) VALUES (?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$title, $description, $categoryId, $endDate, $userId, $target_file]);
-        header('Location: index.php');
-        exit();
-    } catch (PDOException $e) {
-        echo 'Error: ' . $e->getMessage();
-    }
+    // Redirect to the homepage after adding the auction
+    header('Location: index.php');
+    exit;
 }
 
-include 'includes/header.php';
+// Fetch categories for the select dropdown
+$stmt = $pdo->query('SELECT * FROM categories');
+$categories = $stmt->fetchAll();
 ?>
 
 <!DOCTYPE html>
@@ -60,35 +54,47 @@ include 'includes/header.php';
 <head>
     <meta charset="UTF-8">
     <title>Add Auction</title>
-    <link rel="stylesheet" href="carbuy.css">
+    <link rel="stylesheet" href="css/form.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-    <h2>Add Auction</h2>
+<section>
+    <h1>Add Auction</h1>
     <form action="addAuction.php" method="post" enctype="multipart/form-data">
-        <label for="title">Title:</label>
-        <input type="text" id="title" name="title" required><br>
-        
-        <label for="description">Description:</label>
-        <textarea id="description" name="description" required></textarea><br>
-        
-        <label for="category">Category:</label>
-        <select id="category" name="category" required>
-            <?php
-            $stmt = $pdo->query('SELECT * FROM category');
-            while ($row = $stmt->fetch()) {
-                echo '<option value="'.$row['id'].'">'.$row['name'].'</option>';
-            }
-            ?>
-        </select>
-        
-        <label for="endDate">End Date:</label>
-        <input type="date" id="endDate" name="endDate" required><br>
-
-        <label for="image">Image:</label>
-        <input type="file" id="image" name="image" accept="image/*" required><br>
-        
-        <button type="submit">Add Auction</button>
+        <div class="input-group">
+            <label for="title">Title:</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+        <div class="input-group">
+            <label for="description">Description:</label>
+            <textarea id="description" name="description" required></textarea>
+        </div>
+        <div class="input-group">
+            <label for="current_price">Current Price:</label>
+            <input type="text" id="current_price" name="current_price" required>
+        </div>
+        <div class="input-group">
+            <label for="category">Category:</label>
+            <select id="category" name="category" required>
+                <?php foreach ($categories as $category): ?>
+                    <option value="<?= $category['id'] ?>"><?= htmlspecialchars($category['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <a class="add" href="addCategory.php">+</a> <!-- Link to add new category -->
+        </div>
+        <div class="input-group">
+            <label for="end_date">End Date:</label>
+            <input type="datetime-local" id="end_date" name="end_date" required>
+        </div>
+        <div class="input-group">
+            <label for="image">Image:</label>
+            <input type="file" id="image" name="image" accept="image/*">
+        </div>
+        <div class="input-group">
+            <input type="submit" value="Add Auction">
+        </div>
     </form>
+</section>
 </body>
 </html>
 

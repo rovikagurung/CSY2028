@@ -1,70 +1,85 @@
 <?php
-include 'includes/header.php';
+session_start();
+include 'includes/db.php'; // Include your database connection file
 
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
-}
-
-$auction_id = $_GET['id'];
-
-$stmt = $pdo->prepare('SELECT * FROM auctions WHERE id = ? AND user_id = ?');
-$stmt->execute([$auction_id, $_SESSION['user_id']]);
-$auction = $stmt->fetch();
-
-if (!$auction) {
-    echo '<p>Auction not found or you do not have permission to edit this auction.</p>';
+// Check if auction ID is provided in the URL
+if (!isset($_GET['id'])) {
+    echo '<p>Auction ID not provided.</p>';
     include 'includes/footer.php';
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title = $_POST['title'];
-    $description = $_POST['description'];
-    $category_id = $_POST['category'];
-    $end_date = $_POST['end_date'];
+$auction_id = $_GET['id']; // Retrieve auction ID from URL parameter
 
-    // Handle image upload
-    $image = $auction['image'];
-    if ($_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $image = basename($_FILES['image']['name']);
-        move_uploaded_file($_FILES['image']['tmp_name'], "images/auctions/$image");
-    }
+// Fetch auction details from database
+$stmt = $pdo->prepare('SELECT * FROM auctions WHERE id = ?');
+$stmt->execute([$auction_id]);
+$auction = $stmt->fetch(); // Fetch the auction details
 
-    $stmt = $pdo->prepare('UPDATE auctions SET title = ?, description = ?, category_id = ?, end_date = ?, image = ? WHERE id = ? AND user_id = ?');
-    $stmt->execute([$title, $description, $category_id, $end_date, $image, $auction_id, $_SESSION['user_id']]);
-
-    header('Location: auction.php?id=' . $auction_id);
+// Check if auction exists
+if (!$auction) {
+    echo '<p>Auction not found.</p>';
+    include 'includes/footer.php';
     exit;
 }
 
-// Fetch categories for the select dropdown
-$stmt = $pdo->query('SELECT * FROM categories');
-$categories = $stmt->fetchAll();
+// Check if logged-in user is the owner of the auction
+if ($_SESSION['user_id'] !== $auction['user_id']) {
+    echo '<p>You do not have permission to edit this auction.</p>';
+    include 'includes/footer.php';
+    exit;
+}
+
+// Handle form submission to update auction details
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $title = $_POST['title']; // Retrieve and sanitize title from form input
+    $description = $_POST['description']; // Retrieve and sanitize description from form input
+    $current_price = $_POST['current_price']; // Retrieve and sanitize current_price from form input
+
+    // Update the auction in the database
+    $stmt = $pdo->prepare('UPDATE auctions SET title = ?, description = ?, current_price = ? WHERE id = ?');
+    $stmt->execute([$title, $description, $current_price, $auction_id]);
+
+    // Redirect to auction.php after update
+    header('Location: auction.php?id=' . $auction_id);
+    exit;
+}
 ?>
 
-<section>
-    <h1>Edit Auction</h1>
-    <form action="editAuction.php?id=<?= $auction_id ?>" method="post" enctype="multipart/form-data">
-        <label for="title">Title:</label>
-        <input type="text" id="title" name="title" value="<?= htmlspecialchars($auction['title']) ?>" required>
-        <label for="description">Description:</label>
-        <textarea id="description" name="description" required><?= htmlspecialchars($auction['description']) ?></textarea>
-        <label for="category">Category:</label>
-        <select id="category" name="category" required>
-            <?php foreach ($categories as $category): ?>
-                <option value="<?= $category['id'] ?>" <?= $category['id'] == $auction['category_id'] ? 'selected' : '' ?>><?= htmlspecialchars($category['name']) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <label for="end_date">End Date:</label>
-        <input type="datetime-local" id="end_date" name="end_date" value="<?= date('Y-m-d\TH:i', strtotime($auction['end_date'])) ?>" required>
-        <label for="image">Image:</label>
-        <input type="file" id="image" name="image" accept="image/*">
-        <input type="submit" value="Update Auction">
-        <a href="deleteAuction.php?id=<?= $auction_id ?>" class="delete">Delete Auction</a>
-    </form>
-</section>
-
-<?php
-include 'includes/footer.php';
-?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Auction - <?php echo htmlspecialchars($auction['title']); ?></title>
+    <link rel="stylesheet" href="css/form.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <?php include 'includes/header.php'; ?>
+    <article class="car">
+        <section>
+            <h1>Edit Auction - <?php echo htmlspecialchars($auction['title']); ?></h1>
+            <!-- Form to edit auction details -->
+            <form action="editAuction.php?id=<?php echo $auction_id; ?>" method="post">
+                <div class="input-group">
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" value="<?php echo htmlspecialchars($auction['title']); ?>" required>
+                </div>
+                <div class="input-group">
+                    <label for="description">Description:</label>
+                    <textarea id="description" name="description" required><?php echo htmlspecialchars($auction['description']); ?></textarea>
+                </div>
+                <div class="input-group">
+                    <label for="current_price">Current Price:</label>
+                    <input type="text" id="current_price" name="current_price" value="<?php echo htmlspecialchars($auction['current_price']); ?>" required>
+                    <!-- Add more fields as needed for editing -->
+                </div>
+                <div class="input-group">
+                    <input type="submit" value="Update Auction">
+                </div>
+            </form>
+        </section>
+    </article>
+    <?php include 'includes/footer.php'; ?>
+</body>
+</html>

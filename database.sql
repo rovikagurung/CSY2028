@@ -22,6 +22,7 @@ CREATE TABLE auctions (
     user_id INT,
     end_date DATETIME,
     image VARCHAR(255),
+    current_price DECIMAL(10,2) DEFAULT 0,
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -32,9 +33,19 @@ CREATE TABLE reviews (
     user_id INT,
     auction_id INT,
     review_date DATETIME,
+    user_name VARCHAR(255) NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (auction_id) REFERENCES auctions(id)
 );
+
+CREATE TABLE admins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 CREATE TABLE bids (
     id INT AUTO_INCREMENT PRIMARY KEY,
